@@ -34,8 +34,7 @@ Android devices.
       
       ## Screen Shot
       
-      ![screenshot_androidtext](https://user-images.githubusercontent.com/24228143/39515820-d5d601a2-4e18-11e8-9113-8fcf178c88d9.jpeg)
-![screenshot_intel](https://user-images.githubusercontent.com/24228143/39515823-d62acfe8-4e18-11e8-8c23-3f8495806a5d.jpeg)
+      ![img.png](img.png)
 
    
    
