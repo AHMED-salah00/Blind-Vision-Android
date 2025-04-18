@@ -1,143 +1,221 @@
 package com.dorvis.textrecognitionandroid;
 
-import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.Manifest;
 import android.content.pm.PackageManager;
-import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
+import android.media.Image;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
-import android.util.SparseArray;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
+import android.widget.Button;
 import android.widget.TextView;
-import com.google.android.gms.vision.CameraSource;
-import com.google.android.gms.vision.Detector;
-import com.google.android.gms.vision.text.TextBlock;
-import com.google.android.gms.vision.text.TextRecognizer;
+import android.widget.Toast;
 
-import java.io.IOException;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.camera.view.PreviewView;
 
-public class MainActivity extends AppCompatActivity {
+import com.google.android.gms.tasks.Task;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
-    SurfaceView mCameraView;
-    TextView mTextView;
-    CameraSource mCameraSource;
+import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
+public class MainActivity extends AppCompatActivity implements TextToSpeech.OnInitListener {
     private static final String TAG = "MainActivity";
-    private static final int requestPermissionID = 101;
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 100;
+
+    private PreviewView previewView;
+    private TextView textView;
+    private Button readTextButton;
+    private ExecutorService cameraExecutor;
+    private TextRecognizer textRecognizer;
+    private TextToSpeech textToSpeech;
+    private String lastRecognizedText = "";
+    private boolean isTtsReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        mCameraView = findViewById(R.id.surfaceView);
-        mTextView = findViewById(R.id.text_view);
+        previewView = findViewById(R.id.previewView);
+        textView = findViewById(R.id.text_view);
+        readTextButton = findViewById(R.id.read_text_button);
 
-        startCameraSource();
+        // Initialize text-to-speech
+        textToSpeech = new TextToSpeech(this, this);
+
+        // Initialize the text recognizer
+        textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+
+        // Initialize CameraExecutor to handle camera lifecycle
+        cameraExecutor = Executors.newSingleThreadExecutor();
+
+        // Set read text button click listener
+        readTextButton.setOnClickListener(v -> readTextAloud());
+
+        // Check for camera permission
+        if (hasCameraPermission()) {
+            startCamera();
+        } else {
+            requestCameraPermission();
+        }
+    }
+
+    @Override
+    public void onInit(int status) {
+        if (status == TextToSpeech.SUCCESS) {
+            // Set language for TTS
+            int result = textToSpeech.setLanguage(Locale.US);
+
+            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+                Log.e(TAG, "Language not supported");
+                Toast.makeText(this, "Text-to-speech language not supported", Toast.LENGTH_SHORT).show();
+            } else {
+                isTtsReady = true;
+                textToSpeech.setSpeechRate(0.85f); // Slightly slower for better comprehension
+                textToSpeech.setPitch(1.0f);
+                readTextButton.setEnabled(true);
+            }
+        } else {
+            Log.e(TAG, "TTS initialization failed");
+            Toast.makeText(this, "Text-to-speech initialization failed", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void readTextAloud() {
+        if (isTtsReady && !lastRecognizedText.isEmpty()) {
+            // Stop any ongoing speech
+            if (textToSpeech.isSpeaking()) {
+                textToSpeech.stop();
+            }
+
+            // Read the text aloud
+            textToSpeech.speak(lastRecognizedText, TextToSpeech.QUEUE_FLUSH, null, "tts1");
+        } else if (lastRecognizedText.isEmpty()) {
+            Toast.makeText(this, "No text to read", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private boolean hasCameraPermission() {
+        return ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestCameraPermission() {
+        ActivityCompat.requestPermissions(
+                this,
+                new String[]{Manifest.permission.CAMERA},
+                CAMERA_PERMISSION_REQUEST_CODE
+        );
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode != requestPermissionID) {
-            Log.d(TAG, "Got unexpected permission result: " + requestCode);
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-            return;
-        }
-
-        if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            try {
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    return;
-                }
-                mCameraSource.start(mCameraView.getHolder());
-            } catch (IOException e) {
-                e.printStackTrace();
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startCamera();
+            } else {
+                Toast.makeText(this, "Camera permission is required", Toast.LENGTH_SHORT).show();
+                finish();
             }
         }
     }
 
-    private void startCameraSource() {
+    private void startCamera() {
+        // Create CameraProvider (ProcessCameraProvider)
+        ProcessCameraProvider.getInstance(this).addListener(() -> {
+            try {
+                ProcessCameraProvider cameraProvider = ProcessCameraProvider.getInstance(this).get();
 
-        //Create the TextRecognizer
-        final TextRecognizer textRecognizer = new TextRecognizer.Builder(getApplicationContext()).build();
+                // Unbind any previously bound use cases
+                cameraProvider.unbindAll();
 
-        if (!textRecognizer.isOperational()) {
-            Log.w(TAG, "Detector dependencies not loaded yet");
+                // Select the camera to use (back camera)
+                CameraSelector cameraSelector = new CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build();
+
+                // Setup the Preview use case (CameraX Preview)
+                Preview preview = new Preview.Builder()
+                        .build();
+
+                // Attach the preview to the PreviewView
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                // Setup the ImageAnalysis use case for text recognition
+                ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build();
+
+                imageAnalysis.setAnalyzer(cameraExecutor, this::analyzeImage);
+
+                // Bind the camera lifecycle to the cameraProvider
+                cameraProvider.bindToLifecycle(
+                        this,
+                        cameraSelector,
+                        preview,
+                        imageAnalysis
+                );
+
+            } catch (ExecutionException | InterruptedException e) {
+                Log.e(TAG, "Camera setup failed", e);
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private void analyzeImage(ImageProxy imageProxy) {
+        Image mediaImage = imageProxy.getImage();
+        if (mediaImage != null) {
+            InputImage image = InputImage.fromMediaImage(
+                    mediaImage,
+                    imageProxy.getImageInfo().getRotationDegrees()
+            );
+
+            Task<Text> result = textRecognizer.process(image)
+                    .addOnSuccessListener(text -> {
+                        // Process and display recognized text
+                        lastRecognizedText = text.getText();
+                        runOnUiThread(() -> textView.setText(lastRecognizedText));
+                    })
+                    .addOnFailureListener(e ->
+                            Log.e(TAG, "Text recognition failed", e)
+                    )
+                    .addOnCompleteListener(task ->
+                            imageProxy.close()
+                    );
         } else {
-
-            //Initialize camerasource to use high resolution and set Autofocus on.
-            mCameraSource = new CameraSource.Builder(getApplicationContext(), textRecognizer)
-                    .setFacing(CameraSource.CAMERA_FACING_BACK)
-                    .setRequestedPreviewSize(1280, 1024)
-                    .setAutoFocusEnabled(true)
-                    .setRequestedFps(2.0f)
-                    .build();
-
-            /**
-             * Add call back to SurfaceView and check if camera permission is granted.
-             * If permission is granted we can start our cameraSource and pass it to surfaceView
-             */
-            mCameraView.getHolder().addCallback(new SurfaceHolder.Callback() {
-                @Override
-                public void surfaceCreated(SurfaceHolder holder) {
-                    try {
-
-                        if (ActivityCompat.checkSelfPermission(getApplicationContext(),
-                                Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-
-                            ActivityCompat.requestPermissions(MainActivity.this,
-                                    new String[]{Manifest.permission.CAMERA},
-                                    requestPermissionID);
-                            return;
-                        }
-                        mCameraSource.start(mCameraView.getHolder());
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                }
-
-                @Override
-                public void surfaceDestroyed(SurfaceHolder holder) {
-                    mCameraSource.stop();
-                }
-            });
-
-            //Set the TextRecognizer's Processor.
-            textRecognizer.setProcessor(new Detector.Processor<TextBlock>() {
-                @Override
-                public void release() {
-                }
-
-                /**
-                 * Detect all the text from camera using TextBlock and the values into a stringBuilder
-                 * which will then be set to the textView.
-                 * */
-                @Override
-                public void receiveDetections(Detector.Detections<TextBlock> detections) {
-                    final SparseArray<TextBlock> items = detections.getDetectedItems();
-                    if (items.size() != 0 ){
-
-                        mTextView.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                StringBuilder stringBuilder = new StringBuilder();
-                                for(int i=0;i<items.size();i++){
-                                    TextBlock item = items.valueAt(i);
-                                    stringBuilder.append(item.getValue());
-                                    stringBuilder.append("\n");
-                                }
-                                mTextView.setText(stringBuilder.toString());
-                            }
-                        });
-                    }
-                }
-            });
+            imageProxy.close();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        // Shut down TextToSpeech
+        if (textToSpeech != null) {
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+        }
+
+        // Shut down the executor service to avoid memory leaks
+        cameraExecutor.shutdown();
+
+        super.onDestroy();
     }
 }

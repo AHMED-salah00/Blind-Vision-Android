@@ -1,29 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:weightSum="5"
     tools:context=".MainActivity">
 
-    <SurfaceView
-        android:id="@+id/surfaceView"
+    <!-- Camera Preview (using CameraX) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="4" />
+        android:layout_height="match_parent" />
 
+    <!-- Text display area for recognized text -->
     <TextView
         android:id="@+id/text_view"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/read_text_button"
         android:layout_margin="8dp"
-        android:layout_weight="1"
-        android:gravity="center"
+        android:padding="16dp"
+        android:background="#80000000"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
         android:textStyle="bold"
-        android:text="@string/txt_message"
-        android:textColor="@android:color/black"
-        android:textSize="20sp" />
+        android:text="Detected text will appear here" />
 
-</LinearLayout>
+    <!-- Button to read text aloud -->
+    <Button
+        android:id="@+id/read_text_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="8dp"
+        android:padding="12dp"
+        android:background="@color/colorPrimary"
+        android:textColor="#FFFFFF"
+        android:text="Read Text Aloud"
+        android:enabled="false" />
+
+</RelativeLayout>
