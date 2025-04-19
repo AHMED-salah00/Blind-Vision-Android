@@ -3,39 +3,58 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:contentDescription="Text Reader Application"
     tools:context=".MainActivity">
 
-    <!-- Camera Preview (using CameraX) -->
+    <!-- Camera Preview (minimized but accessible) -->
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:contentDescription="Camera preview area" />
 
     <!-- Text display area for recognized text -->
     <TextView
         android:id="@+id/text_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_above="@+id/read_text_button"
-        android:layout_margin="8dp"
+        android:layout_above="@+id/bottom_controls"
+        android:layout_margin="16dp"
+        android:background="#E6000000"
+        android:contentDescription="Detected text area"
         android:padding="16dp"
-        android:background="#80000000"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
+        android:textSize="22sp"
         android:text="Detected text will appear here" />
 
-    <!-- Button to read text aloud -->
-    <Button
-        android:id="@+id/read_text_button"
+    <!-- Bottom control area with large, accessible buttons -->
+    <LinearLayout
+        android:id="@+id/bottom_controls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:layout_margin="8dp"
-        android:padding="12dp"
-        android:background="@color/colorPrimary"
-        android:textColor="#FFFFFF"
-        android:text="Read Text Aloud"
-        android:enabled="false" />
+        android:orientation="horizontal"
+        android:padding="16dp">
 
+        <!-- Button to capture and read text -->
+        <Button
+            android:id="@+id/read_text_button"
+            android:layout_width="0dp"
+            android:layout_height="80dp"
+            android:layout_weight="1"
+            android:contentDescription="Capture and read text aloud"
+            android:textSize="18sp"
+            android:text="Read Text" />
+
+        <!-- Button to stop reading -->
+        <Button
+            android:id="@+id/stop_button"
+            android:layout_width="0dp"
+            android:layout_height="80dp"
+            android:layout_marginStart="16dp"
+            android:layout_weight="1"
+            android:contentDescription="Stop reading text"
+            android:textSize="18sp"
+            android:text="Stop" />
+    </LinearLayout>
 </RelativeLayout>
